@@ -47,6 +47,12 @@ Resources:
     Type: AWS::Serverless::Api
     Properties:
       StageName: api
+      EndpointConfiguration: REGIONAL
+      MethodSettings:
+        - DataTraceEnabled: true
+          LoggingLevel: 'INFO'
+          ResourcePath: '/*'
+          HttpMethod: '*'
       DefinitionBody:
         openapi: 3.0.1
         info:
@@ -77,7 +83,7 @@ Resources:
                           value:
                             message: success
               x-amazon-apigateway-integration:
-                uri: 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lineBotLambdaFunction.Arn}/invocations'
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lineBotLambdaFunction.Arn}/invocations'
                 responses:
                   default:
                     statusCode: '200'
