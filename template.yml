@@ -22,27 +22,6 @@ Resources:
   # Each Lambda function is defined by properties:
   # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
 
-  # This is a Lambda function config associated with the source code: hello-from-lambda.js
-  lineBotLambdaFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: ./
-      Handler: src/handlers/line-bot.lineBotHandler
-      Runtime: nodejs12.x
-      MemorySize: 128
-      Timeout: 100
-      Description: LINE bot sample
-      Policies:
-        # Give Lambda basic execution Permission to the helloFromLambda
-        - AWSLambdaBasicExecutionRole
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            Method: post
-            Path: '/callback'
-            RestApiId: !Ref webhook
-
   webhook:
     Type: AWS::Serverless::Api
     Properties:
@@ -83,13 +62,57 @@ Resources:
                           value:
                             message: success
               x-amazon-apigateway-integration:
-                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lineBotLambdaFunction.Arn}/invocations'
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:sqs:path/${AWS::AccountId}/line-webhook-sample'
+                credentials: !Sub 'arn:aws:iam::${AWS::AccountId}:role/api-gateway-sqs-sendMessage'
                 responses:
                   default:
                     statusCode: '200'
-                passthroughBehavior: when_no_match
+                passthroughBehavior: when_no_templates
                 httpMethod: POST
                 contentHandling: CONVERT_TO_TEXT
-                type: aws_proxy
+                requestParameters:
+                  integration.request.header.Content-Type: "'application/x-www-form-urlencoded'"
+                requestTemplates:
+                  application/json: 'Action=SendMessage&MessageGroupId=lineWebhook&MessageAttribute.1.Name=line-signature&MessageAttribute.1.Value.StringValue=$util.urlEncode($input.params().header.X-Line-Signature)&MessageAttribute.1.Value.DataType=String&MessageBody=$util.urlEncode($input.body)'
+                type: aws
               description: LINEプラットフォームからのWebhookに対するcallback
+
+  queue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: line-webhook-sample.fifo
+      FifoQueue: true
+      VisibilityTimeout: 100
+
+  lineBotLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/handlers/line-bot.lineBotHandler
+      Runtime: nodejs12.x
+      MemorySize: 128
+      Timeout: 100
+      Description: LINE bot sample
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - AWSLambdaSQSQueueExecutionRole
+        - AmazonDynamoDBFullAccess
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt queue.Arn
+            BatchSize: 10
+      Environment:
+        Variables:
+          CHANNEL_ACCESS_TOKEN: 'RcATFHxGTyPAfR8SEt8n3g8MwqpHJUBGC2p4KZm0bWH4lVnzFc0Fa42GhGMs0PTnzNl6q6SQmp2OlPD7RMtsmST55jSrqgu5XOPXZdioljXZ+Z995G1NPIax6wldg4KEfYY4He8yo7Iy0jmg5mxUjgdB04t89/1O/w1cDnyilFU='
+          CHANNEL_SECRET: '20709e6b6a90bc11232820d0ce4845ec'
+          WEBHOOK_ENDPOINT: 'https://9ukfs7dyi5.execute-api.ap-northeast-1.amazonaws.com/api'
+  DB:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: userId
+        Type: String
+      TableName: line-user-test
 
