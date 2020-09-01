@@ -19,9 +19,6 @@ Globals:
 # Resources declares the AWS resources that you want to include in the stack
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
 Resources:
-  # Each Lambda function is defined by properties:
-  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-
   webhook:
     Type: AWS::Serverless::Api
     Properties:
@@ -62,14 +59,13 @@ Resources:
                           value:
                             message: success
               x-amazon-apigateway-integration:
-                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:sqs:path/${AWS::AccountId}/line-webhook-sample'
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:sqs:path/${AWS::AccountId}/line-webhook-sample.fifo'
                 credentials: !Sub 'arn:aws:iam::${AWS::AccountId}:role/api-gateway-sqs-sendMessage'
                 responses:
                   default:
                     statusCode: '200'
                 passthroughBehavior: when_no_templates
                 httpMethod: POST
-                contentHandling: CONVERT_TO_TEXT
                 requestParameters:
                   integration.request.header.Content-Type: "'application/x-www-form-urlencoded'"
                 requestTemplates:
@@ -82,6 +78,7 @@ Resources:
     Properties:
       QueueName: line-webhook-sample.fifo
       FifoQueue: true
+      ContentBasedDeduplication: true
       VisibilityTimeout: 100
 
   lineBotLambdaFunction:
@@ -103,11 +100,7 @@ Resources:
           Properties:
             Queue: !GetAtt queue.Arn
             BatchSize: 10
-      Environment:
-        Variables:
-          CHANNEL_ACCESS_TOKEN: 'RcATFHxGTyPAfR8SEt8n3g8MwqpHJUBGC2p4KZm0bWH4lVnzFc0Fa42GhGMs0PTnzNl6q6SQmp2OlPD7RMtsmST55jSrqgu5XOPXZdioljXZ+Z995G1NPIax6wldg4KEfYY4He8yo7Iy0jmg5mxUjgdB04t89/1O/w1cDnyilFU='
-          CHANNEL_SECRET: '20709e6b6a90bc11232820d0ce4845ec'
-          WEBHOOK_ENDPOINT: 'https://9ukfs7dyi5.execute-api.ap-northeast-1.amazonaws.com/api'
+
   DB:
     Type: AWS::Serverless::SimpleTable
     Properties:
@@ -115,4 +108,3 @@ Resources:
         Name: userId
         Type: String
       TableName: line-user-test
-
